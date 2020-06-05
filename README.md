@@ -1,4 +1,4 @@
-## Assistant for WIRE system
+# Search system in WIRE summarization
 
 ##### 준비사항
 - pyyaml
