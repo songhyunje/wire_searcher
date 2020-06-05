@@ -1,0 +1,3 @@
+pyyaml
+elasticsearch
+elasticsearch_dsl
