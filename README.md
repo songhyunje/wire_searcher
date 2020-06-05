@@ -16,6 +16,12 @@ elasticsearch:
     news_index: 
 ```
 
+##### 키워드 검색 사용법
+- search_example.py 참고
+
+##### 토픽 아이디 부착 및 토픽 검색 사용법
+- topic_example.py 참고
+
 -------------
 참고: 현재 엘라스틱 서치에 구축된 mapping 정보
 ```json
