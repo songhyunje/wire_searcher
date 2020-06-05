@@ -6,7 +6,7 @@ from search.search_handler import Searcher
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='Search by topic index')
-    parser.add_argument('--config', default='../config.yaml', help='Config file.')
+    parser.add_argument('--config', default='config.yaml', help='Config file.')
     args = parser.parse_args()
 
     with open(args.config, 'r') as ymlfile:
