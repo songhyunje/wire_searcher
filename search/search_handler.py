@@ -5,8 +5,7 @@ from datetime import datetime, timedelta
 import yaml
 from elasticsearch import Elasticsearch
 from elasticsearch.helpers import streaming_bulk
-from elasticsearch_dsl import Search, UpdateByQuery
-
+from elasticsearch_dsl import Search, UpdateByQuery, Q
 
 logging.basicConfig(level=getattr(logging, 'INFO'))
 logger = logging.getLogger(__name__)
@@ -42,10 +41,19 @@ class Searcher(object):
 
         return from_datetime, to_datetime
 
-    def search_by_date(self, from_date, to_date):
+    def search_by_date(self, from_date, to_date, category=[]):
         from_datetime, to_datetime = self._covert_to_datetime(from_date, to_date)
 
+        should = []
+        for value in category:
+            if value[0] == '1':
+                should.append(Q('match', sid1=value))
+            elif value[0] in ['2', '3', '5', '7']:
+                should.append(Q('match', sid2=value))
+
+        q = Q('bool', should=should)
         s = Search(using=self.client, index=self.index) \
+            .query(q) \
             .filter('range', publish_datetime={'from': from_datetime, 'to': to_datetime})
 
         for hit in s.scan():

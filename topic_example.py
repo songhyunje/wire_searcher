@@ -31,6 +31,18 @@ if __name__ == '__main__':
     #     title = news.title      # get title
     #     # do somthing
 
+    news_ids, topic_ids = [], []
+    # search_by_date for all category
+    for news in searcher.search_by_date(from_date, to_date):
+        news_ids.append(news.news_id)
+        topic_ids.append(random.randint(1, 5))
+
+    news_ids, topic_ids = [], []
+    # search_by_date given categories
+    for news in searcher.search_by_date(from_date, to_date, category=['258', '259']):
+        news_ids.append(news.news_id)
+        topic_ids.append(random.randint(1, 5))
+
     # label topic id per each news
     # imbue a random topic id for test
     news_ids, topic_ids = [], []
