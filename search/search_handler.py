@@ -71,6 +71,17 @@ class Searcher(object):
             # logger.info("%s) %d %s" % (hit.meta.id, hit.daily_topic, hit.content))
             yield hit
 
+    def search_by_longterm_topic(self, topic, from_date=None, to_date=None):
+        from_datetime, to_datetime = self._covert_to_datetime(from_date, to_date)
+
+        s = Search(using=self.client, index=self.index) \
+            .query("match", longterm_topic=topic) \
+            .filter('range', publish_datetime={'from': from_datetime, 'to': to_datetime})
+
+        response = s.execute()
+        for hit in response:
+            yield hit
+
     def clear_daily_topic(self, news_ids=None, from_date=None, to_date=None):
         # # TODO: Rewrite this update using UpdateByQuery
         # from_datetime, to_datetime = self._covert_to_datetime(from_datetime, to_datetime)
