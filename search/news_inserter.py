@@ -23,8 +23,8 @@ def load_news(fn):
     with io.open(fn, 'r', encoding='utf-8') as f:
         data = json.load(f)
         for news in data:
-            # news_id = int(news['oid'] + news['aid'])
-            news_id = news['id']
+            unique_news_id = int(news['oid'] + news['aid'])
+            news_id = int(news['id'])
             if news_id in news_ids:
                 continue
 
@@ -44,7 +44,7 @@ def load_news(fn):
             content = news['기사원문-글자추출']
 
             yield {
-                '_id': int(news_id), 'news_id': int(news_id), 'type': 'news', 'sid1': sid1, 'sid2': sid2,
+                '_id': unique_news_id, 'news_id': news_id, 'type': 'news', 'sid1': sid1, 'sid2': sid2,
                 'title': title, 'naver_url': naver_url, 'origin_url': origin_url,
                 'category': category, 'publisher': publisher, 'publish_datetime': publish_datetime,
                 'content': content, 'daily_topic': 0, 'longterm_topic': 0

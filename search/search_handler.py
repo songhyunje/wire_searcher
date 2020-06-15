@@ -62,8 +62,15 @@ class Searcher(object):
     def search_by_daily_topic(self, topic, from_date=None, to_date=None):
         from_datetime, to_datetime = self._covert_to_datetime(from_date, to_date)
 
+        should = []
+        if isinstance(topic, list):
+            should.extend([Q('match', daily_topic=t) for t in topic])
+        else:
+            should.append(Q('match', daily_topic=topic))
+
+        q = Q('bool', should=should)
         s = Search(using=self.client, index=self.index) \
-            .query("match", daily_topic=topic) \
+            .query(q) \
             .filter('range', publish_datetime={'from': from_datetime, 'to': to_datetime})
 
         response = s.execute()
@@ -74,8 +81,15 @@ class Searcher(object):
     def search_by_longterm_topic(self, topic, from_date=None, to_date=None):
         from_datetime, to_datetime = self._covert_to_datetime(from_date, to_date)
 
+        should = []
+        if isinstance(topic, list):
+            should.extend([Q('match', longterm_topic=t) for t in topic])
+        else:
+            should.append(Q('match', longterm_topic=topic))
+
+        q = Q('bool', should=should)
         s = Search(using=self.client, index=self.index) \
-            .query("match", longterm_topic=topic) \
+            .query(q) \
             .filter('range', publish_datetime={'from': from_datetime, 'to': to_datetime})
 
         response = s.execute()
@@ -101,7 +115,7 @@ class Searcher(object):
             s = Search(using=self.client, index=self.index) \
                 .filter('range', publish_datetime={'from': from_datetime, 'to': to_datetime})
 
-            news_ids = [hit.news_id for hit in s.scan()]
+            news_ids = [hit.meta.id for hit in s.scan()]
             topic_ids = [0] * len(news_ids)
 
         for ok, result in streaming_bulk(self.client, self._update_daily_topic(news_ids, topic_ids),
@@ -113,6 +127,29 @@ class Searcher(object):
                 logger.warning("Failed to %s document %s: %r" % (action, doc_id, result))
             else:
                 logger.info(doc_id)
+
+    def clear_longterm_topic(self, news_ids=None, from_date=None, to_date=None):
+        if news_ids:
+            topic_ids = [0] * len(news_ids)
+
+        if not news_ids and from_date and to_date:
+            from_datetime, to_datetime = self._covert_to_datetime(from_date, to_date)
+            s = Search(using=self.client, index=self.index) \
+                .filter('range', publish_datetime={'from': from_datetime, 'to': to_datetime})
+
+            news_ids = [hit.meta.id for hit in s.scan()]
+            topic_ids = [0] * len(news_ids)
+
+        for ok, result in streaming_bulk(self.client, self._update_longterm_topic(news_ids, topic_ids),
+                                         index=self.index, chunk_size=100):
+            action, result = result.popitem()
+            doc_id = "/%s/doc/%s" % (self.index, result["_id"])
+
+            if not ok:
+                logger.warning("Failed to %s document %s: %r" % (action, doc_id, result))
+            else:
+                logger.info(doc_id)
+
 
     def _update_daily_topic(self, news_ids, topic_ids):
         for news_id, topic_id in zip(news_ids, topic_ids):
