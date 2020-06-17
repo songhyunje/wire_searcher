@@ -1,6 +1,5 @@
 import argparse
 import io
-import re
 import json
 import logging
 
@@ -11,10 +10,6 @@ from elasticsearch.helpers import streaming_bulk
 LOG_FORMAT = '%(asctime)s %(name)-12s %(levelname)-8s %(message)s'
 logging.basicConfig(format=LOG_FORMAT, level=getattr(logging, 'INFO'))
 logger = logging.getLogger(__name__)
-
-start_pattern = re.compile(r'^\[.*\]')
-end_pattern = re.compile(r'(\(.*\)|\[.*\])$')
-white = re.compile(r'\s+')
 
 news_ids = set()
 
