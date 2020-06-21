@@ -59,6 +59,25 @@ class Searcher(object):
         for hit in s.scan():
             yield hit
 
+    def search_topic_news_by_date(self, from_date, to_date, category=[]):
+        from_datetime, to_datetime = self._covert_to_datetime(from_date, to_date)
+
+        should = []
+        for value in category:
+            if value[0] == '1':
+                should.append(Q('match', sid1=value))
+            elif value[0] in ['2', '3', '5', '7']:
+                should.append(Q('match', sid2=value))
+
+        must_not = [Q('match', daily_topic='0')]
+        q = Q('bool', should=should, must_not=must_not)
+        s = Search(using=self.client, index=self.index) \
+            .query(q) \
+            .filter('range', publish_datetime={'from': from_datetime, 'to': to_datetime})
+
+        for hit in s.scan():
+            yield hit
+
     def search_by_daily_topic(self, topic, from_date=None, to_date=None):
         from_datetime, to_datetime = self._covert_to_datetime(from_date, to_date)
 
