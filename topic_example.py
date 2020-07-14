@@ -17,69 +17,40 @@ if __name__ == '__main__':
 
     hosts = cfg['elasticsearch']['host']
     news_index = cfg['elasticsearch']['news_index']
-    searcher = Searcher(hosts=hosts, index=news_index)
+    topic_index = cfg['elasticsearch']['topic_index']
+    searcher = Searcher(hosts=hosts, news_index=news_index, topic_index=topic_index)
 
     searcher.count()
 
-    from_date = "2020-01-01"
-    to_date = "2020-01-02"
+    # 기간을 설정하여 뉴스를 가져오며, news.daily_topic을 통해 부착된 daily_topic id를 얻을 수 있음.
+    # for news in searcher.search_topic_news_by_date("2020-05-01", "2020-05-31"):
+    #     print(news.meta.id, news.news_id, news.title, news.daily_topic)
 
-    # Get news id & content and then do the topic modeling
-    # for news in searcher.search_by_date(from_date, to_date):
-    #     news_id = news.news_id  # get news_id
-    #     content = news.content  # get content
-    #     title = news.title      # get title
-    #     # do somthing
+    # daily_topic_id를 입력(기간은 optional)으로 문서들을 가져올 수 있음
+    for news in searcher.search_by_daily_topic("D_20200526_01"):
+        print(news.news_id, news.title, news.content)
 
-    unique_news_ids, news_ids, topic_ids = [], [], []
-    # search_by_date for all category
-    for news in searcher.search_by_date(from_date, to_date):
-        unique_news_ids.append(news.meta.id)
-        news_ids.append(news.news_id)
-    print(len(news_ids))
+    # topic_ids와 summaries를 입력으로 summary 등록
+    # topic_ids = ["D_20200101_01", "D_20200101_02", "D_20200101_03", "D_20200101_04", "D_20200101_05",
+    #              "D_20200102_01", "D_20200102_02", "D_20200102_03", "D_20200102_04", "D_20200102_05"]
+    # summaries = ["I got pushed 떠밀려 왔어", "그리고 내곁에는 니가 있어", "외로워도 기댈 곳 없이",
+    #              "힘차게 뛰어가 let\'s just try", "친구가 되어 함께 걸어줘",
+    #              "오늘 같은 날 마주쳐 이게 뭐야", "상태가 말이 아니야",
+    #              "내 맘이 방심할 때마다 불쑥 나타난 뒤", "또 물보라를 일으켜", "da da da da da da da da da" ]
+    # searcher.insert_topic_info(topic_ids, summaries, "summary")
+    # # sleep(3)
 
-    unique_news_ids, news_ids, topic_ids = [], [], []
-    # search_by_date given categories
-    for news in searcher.search_by_date(from_date, to_date, category=['258', '259']):
-        unique_news_ids.append(news.meta.id)
-        news_ids.append(news.news_id)
-    print(len(news_ids))
-
-    # label topic id per each news
-    # imbue random topic ids for test
-    unique_news_ids, news_ids, topic_ids = [], [], []
-    for news in searcher.search_by_date(from_date, to_date, category=['258', '259']):
-        unique_news_ids.append(news.meta.id)
-        news_ids.append(news.news_id)
-        topic_ids.append(['D_20200101_0' + str(random.randint(1, 5)) for _ in range(random.randint(1, 3))])
-
-    # update
-    searcher.update_daily_topics(unique_news_ids, topic_ids)
-
-    sleep(3)
-    # get 10 news given the topic id
-    for news in searcher.search_by_daily_topic("D_20200101_01", from_date, to_date):
-        print(news.meta.id, news.news_id, news.title, news.daily_topic)
-
-    # return 10 news whose topic id
-    for news in searcher.search_by_daily_topic("D_20200101_02", from_date, to_date):
-        print(news.meta.id, news.news_id, news.title, news.daily_topic)
-
-    # return 10 news whose topic id
-    for news in searcher.search_by_daily_topic(["D_20200101_01", "D_20200101_02"], from_date, to_date):
-        print(news.meta.id, news.news_id, news.title, news.daily_topic)
-
-    # clear daily_topic only given news_ids
-    sleep(3)
-    searcher.clear_daily_topic(news_ids=unique_news_ids[:100])
-
-    sleep(3)
-    for news in searcher.search_by_daily_topic("D_20200101_02", from_date, to_date):
-        print(news.meta.id, news.news_id, news.title, news.daily_topic)
-
-    sleep(3)
-    searcher.clear_daily_topic(from_date=from_date, to_date=to_date)
-
-    sleep(3)
-    for news in searcher.search_by_daily_topic("D_20200101_02", from_date, to_date):
-        print(news.meta.id, news.news_id, news.title, news.daily_topic)
+    # topic_ids = ["L_2020_01", "L_2020_02"]
+    # texts = ["Into the I-LAND", "Dolphin"]
+    # searcher.insert_topic_info(topic_ids, texts, "text")
+    #
+    # related_topic_ids = [["D_20200101_01", "D_20200101_02", "D_20200101_03", "D_20200101_04", "D_20200101_05"],
+    #                      ["D_20200102_01", "D_20200102_02", "D_20200102_03", "D_20200102_04", "D_20200102_05"]]
+    # searcher.update_topic_info(topic_ids, related_topic_ids, "related_topic_ids")
+    # sleep(3)
+    #
+    # for topic in searcher.get_topic_from_topic_index("D_20200101_01"):
+    #     print(topic.topic_id, topic.summary)
+    #
+    # for topic in searcher.get_topic_from_topic_index(["L_2020_01"]):
+    #     print(topic.topic_id, topic.text, topic.related_topic_ids)

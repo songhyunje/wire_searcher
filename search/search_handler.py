@@ -1,8 +1,6 @@
-import argparse
 import logging
 from datetime import datetime, timedelta
 
-import yaml
 from elasticsearch import Elasticsearch
 from elasticsearch.helpers import streaming_bulk
 from elasticsearch_dsl import Search, UpdateByQuery, Q
@@ -12,12 +10,13 @@ logger = logging.getLogger(__name__)
 
 
 class Searcher(object):
-    def __init__(self, hosts, index):
+    def __init__(self, hosts, news_index, topic_index=None):
         self.client = Elasticsearch(hosts=hosts)
-        self.index = index
+        self.news_index = news_index
+        self.topic_index = topic_index
 
     def search(self, keyword):
-        s = Search(using=self.client, index=self.index)\
+        s = Search(using=self.client, index=self.news_index)\
             .query("match", content=keyword)
 
         response = s.execute()
@@ -52,7 +51,7 @@ class Searcher(object):
                 should.append(Q('match', sid2=value))
 
         q = Q('bool', should=should)
-        s = Search(using=self.client, index=self.index) \
+        s = Search(using=self.client, index=self.news_index) \
             .query(q) \
             .filter('range', publish_datetime={'from': from_datetime, 'to': to_datetime})
 
@@ -71,7 +70,7 @@ class Searcher(object):
 
         must_not = [Q('match', daily_topic='0')]
         q = Q('bool', should=should, must_not=must_not)
-        s = Search(using=self.client, index=self.index) \
+        s = Search(using=self.client, index=self.news_index) \
             .query(q) \
             .filter('range', publish_datetime={'from': from_datetime, 'to': to_datetime})
 
@@ -79,8 +78,6 @@ class Searcher(object):
             yield hit
 
     def search_by_daily_topic(self, topic, from_date=None, to_date=None):
-        from_datetime, to_datetime = self._covert_to_datetime(from_date, to_date)
-
         should = []
         if isinstance(topic, list):
             should.extend([Q('match', daily_topic=t) for t in topic])
@@ -88,14 +85,21 @@ class Searcher(object):
             should.append(Q('match', daily_topic=topic))
 
         q = Q('bool', should=should)
-        s = Search(using=self.client, index=self.index) \
-            .query(q) \
-            .filter('range', publish_datetime={'from': from_datetime, 'to': to_datetime})
 
-        response = s.execute()
-        for hit in response:
-            # logger.info("%s) %d %s" % (hit.meta.id, hit.daily_topic, hit.content))
+        if from_date or to_date:
+            from_datetime, to_datetime = self._covert_to_datetime(from_date, to_date)
+            s = Search(using=self.client, index=self.news_index) \
+                .query(q) \
+                .filter('range', publish_datetime={'from': from_datetime, 'to': to_datetime})
+        else:
+            s = Search(using=self.client, index=self.news_index) \
+                .query(q)
+
+        for hit in s.scan():
             yield hit
+        # response = s.execute()
+        # for hit in response:
+        #     yield hit
 
     def search_by_longterm_topic(self, topic, from_date=None, to_date=None):
         from_datetime, to_datetime = self._covert_to_datetime(from_date, to_date)
@@ -107,13 +111,15 @@ class Searcher(object):
             should.append(Q('match', longterm_topic=topic))
 
         q = Q('bool', should=should)
-        s = Search(using=self.client, index=self.index) \
+        s = Search(using=self.client, index=self.news_index) \
             .query(q) \
             .filter('range', publish_datetime={'from': from_datetime, 'to': to_datetime})
 
-        response = s.execute()
-        for hit in response:
+        for hit in s.scan():
             yield hit
+        # response = s.execute()
+        # for hit in response:
+        #     yield hit
 
     def clear_daily_topic(self, news_ids=None, from_date=None, to_date=None):
         # # TODO: Rewrite this update using UpdateByQuery
@@ -131,16 +137,16 @@ class Searcher(object):
 
         if not news_ids and from_date and to_date:
             from_datetime, to_datetime = self._covert_to_datetime(from_date, to_date)
-            s = Search(using=self.client, index=self.index) \
+            s = Search(using=self.client, index=self.news_index) \
                 .filter('range', publish_datetime={'from': from_datetime, 'to': to_datetime})
 
             news_ids = [hit.meta.id for hit in s.scan()]
             topic_ids = [0] * len(news_ids)
 
         for ok, result in streaming_bulk(self.client, self._update_daily_topic(news_ids, topic_ids),
-                                         index=self.index, chunk_size=100):
+                                         index=self.news_index, chunk_size=100):
             action, result = result.popitem()
-            doc_id = "/%s/doc/%s" % (self.index, result["_id"])
+            doc_id = "/%s/doc/%s" % (self.news_index, result["_id"])
 
             if not ok:
                 logger.warning("Failed to %s document %s: %r" % (action, doc_id, result))
@@ -153,16 +159,16 @@ class Searcher(object):
 
         if not news_ids and from_date and to_date:
             from_datetime, to_datetime = self._covert_to_datetime(from_date, to_date)
-            s = Search(using=self.client, index=self.index) \
+            s = Search(using=self.client, index=self.news_index) \
                 .filter('range', publish_datetime={'from': from_datetime, 'to': to_datetime})
 
             news_ids = [hit.meta.id for hit in s.scan()]
             topic_ids = [0] * len(news_ids)
 
         for ok, result in streaming_bulk(self.client, self._update_longterm_topic(news_ids, topic_ids),
-                                         index=self.index, chunk_size=100):
+                                         index=self.news_index, chunk_size=100):
             action, result = result.popitem()
-            doc_id = "/%s/doc/%s" % (self.index, result["_id"])
+            doc_id = "/%s/doc/%s" % (self.news_index, result["_id"])
 
             if not ok:
                 logger.warning("Failed to %s document %s: %r" % (action, doc_id, result))
@@ -182,11 +188,23 @@ class Searcher(object):
                 '_id': news_id, '_op_type': 'update', 'doc': {'longterm_topic': topic_id}
             }
 
+    def _insert_topic_info(self, topic_ids, information, field):
+        for topic_id, info in zip(topic_ids, information):
+            yield {
+                '_id': topic_id, 'topic_id': topic_id, field: info
+            }
+
+    def _update_topic_info(self, topic_ids, information, field):
+        for topic_id, info in zip(topic_ids, information):
+            yield {
+                '_id': topic_id, '_op_type': 'update', 'doc': {field: info}
+            }
+
     def update_daily_topics(self, news_ids, topic_ids):
         for ok, result in streaming_bulk(self.client, self._update_daily_topic(news_ids, topic_ids),
-                                         index=self.index, chunk_size=100):
+                                         index=self.news_index, chunk_size=100):
             action, result = result.popitem()
-            doc_id = "/%s/doc/%s" % (self.index, result["_id"])
+            doc_id = "/%s/doc/%s" % (self.news_index, result["_id"])
 
             if not ok:
                 logger.warning("Failed to %s document %s: %r" % (action, doc_id, result))
@@ -195,23 +213,62 @@ class Searcher(object):
 
     def update_longterm_topics(self, news_ids, topic_ids):
         for ok, result in streaming_bulk(self.client, self._update_longterm_topic(news_ids, topic_ids),
-                                         index=self.index, chunk_size=100):
+                                         index=self.news_index, chunk_size=100):
             action, result = result.popitem()
-            doc_id = "/%s/doc/%s" % (self.index, result["_id"])
+            doc_id = "/%s/doc/%s" % (self.news_index, result["_id"])
 
             if not ok:
                 logger.warning("Failed to %s document %s: %r" % (action, doc_id, result))
             else:
                 logger.info(doc_id)
 
+    def insert_topic_info(self, topic_ids, values, topic_info):
+        for ok, result in streaming_bulk(self.client, self._insert_topic_info(topic_ids, values, topic_info),
+                                         index=self.topic_index, chunk_size=100):
+            action, result = result.popitem()
+            doc_id = "/%s/doc/%s" % (self.topic_index, result["_id"])
+
+            if not ok:
+                logger.warning("Failed to %s document %s: %r" % (action, doc_id, result))
+            else:
+                logger.info(doc_id)
+
+    def update_topic_info(self, topic_ids, values, topic_info):
+        for ok, result in streaming_bulk(self.client, self._update_topic_info(topic_ids, values, topic_info),
+                                         index=self.topic_index, chunk_size=100):
+            action, result = result.popitem()
+            doc_id = "/%s/doc/%s" % (self.topic_index, result["_id"])
+
+            if not ok:
+                logger.warning("Failed to %s document %s: %r" % (action, doc_id, result))
+            else:
+                logger.info(doc_id)
+
+    def get_topic_from_topic_index(self, topic):
+        should = []
+        if isinstance(topic, list):
+            should.extend([Q('match', topic_id=t) for t in topic])
+        else:
+            should.append(Q('match', topic_id=topic))
+
+        q = Q('bool', should=should)
+        s = Search(using=self.client, index=self.topic_index) \
+            .query(q)
+
+        response = s.execute()
+        for hit in response:
+            yield hit
+
     def aggregate(self, keyword):
-        s = Search(using=self.client, index=self.index).query("match", content=keyword)
+        s = Search(using=self.client, index=self.news_index).query("match", content=keyword)
         response = s.execute()
         for tag in response.aggregations:
             print(tag)
 
     def count(self):
-        res = self.client.count(index=self.index)
-        logger.info("index: %s, count: %d" % (self.index, res['count']))
-        return res['count']
+        news_res = self.client.count(index=self.news_index)
+        topic_res = self.client.count(index=self.topic_index)
+        logger.info("news_index: %s, news_count: %d" % (self.news_index, news_res['count']))
+        logger.info("topic_index: %s, topic_count: %d" % (self.topic_index, topic_res['count']))
+        return news_res['count'], topic_res['count']
 
