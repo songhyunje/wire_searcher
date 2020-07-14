@@ -14,12 +14,16 @@ pip install -r requirements.txt
 elasticsearch:
     host:  
     news_index: 
+    topic_index: 
 ```
 
 ##### 키워드 검색 사용법
 - search_example.py 참고
 
-##### 토픽 아이디 부착 및 토픽 검색 사용법
+##### 데일리 토픽 아이디 부착 및 토픽 검색 사용법
+- daily_topic_example.py 참고
+
+##### 토픽 관련 정보 부착 및 사용법
 - topic_example.py 참고
 
 --------------------------------
@@ -52,48 +56,78 @@ elasticsearch:
 --------------------------------
 
 참고: 현재 엘라스틱 서치에 구축된 mapping 정보
+
+뉴스 관련
 ```json
 {
   "wire_news_search" : {
-    "mappings" : {
-      "properties" : {
-        "category" : {
-          "type" : "keyword"
+    "mappings": {
+      "properties": {
+        "news_id": {   
+            "type": "integer"
         },
-        "content" : {
-          "type" : "text",
-          "analyzer" : "nori_analyzer"
+        "sid1": {
+            "type": "keyword"
         },
-        "daily_topic" : {
-          "type" : "integer",
-          "null_value" : 0
+        "sid2": {
+            "type": "keyword"
         },
-        "longterm_topic" : {
-          "type" : "integer",
-          "null_value" : 0
+        "type": {     
+            "type": "keyword"
         },
-        "naver_url" : {
-          "type" : "keyword"
+        "naver_url": {
+            "type": "keyword"
         },
-        "news_id" : {
-          "type" : "long"
+        "origin_url": {
+            "type": "keyword"
         },
-        "origin_url" : {
-          "type" : "keyword"
+        "category": {
+            "type": "keyword"
         },
-        "publish_datetime" : {
-          "type" : "date",
-          "format" : "yyyy-MM-dd HH:mm:ss"
+        "publisher": {
+            "type": "keyword"
         },
-        "publisher" : {
-          "type" : "keyword"
+        "publish_datetime": {
+            "type": "date",
+            "format": "yyyy-MM-dd HH:mm:ss"
         },
-        "title" : {
-          "type" : "text",
-          "analyzer" : "nori_analyzer"
+        "title": {
+            "type": "text",
+            "analyzer": "nori_analyzer"
         },
-        "type" : {
-          "type" : "keyword"
+        "content": {
+            "type": "text",
+            "analyzer": "nori_analyzer"
+        },
+        "daily_topic": {
+           "type": "keyword",
+        },
+        "longterm_topic": {
+           "type": "keyword",
+        }
+      }
+    }         
+  }
+}
+```
+
+토픽 관련 (이건 향후 MongoDB로 옮길 예정)
+```json
+{
+  "wire_topic" : {
+    "mappings": {
+      "properties": {
+        "topic_id": {
+          "type": "keyword"
+        },
+        "text": {
+          "type": "keyword",
+        },
+        "summary": {
+          "type": "keyword",
+        },
+        "related_topic_ids": {
+          "type": "keyword"
         }
       }
     }
