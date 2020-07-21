@@ -77,6 +77,15 @@ class Searcher(object):
         for hit in s.scan():
             yield hit
 
+    def search_longterm_topics(self):
+        must_not = [Q('match', longterm_topic='0')]
+        q = Q('bool', must_not=must_not)
+        s = Search(using=self.client, index=self.news_index) \
+            .query(q) \
+
+        for hit in s.scan():
+            yield hit
+
     def search_by_daily_topic(self, topic, from_date=None, to_date=None):
         should = []
         if isinstance(topic, list):
@@ -97,9 +106,6 @@ class Searcher(object):
 
         for hit in s.scan():
             yield hit
-        # response = s.execute()
-        # for hit in response:
-        #     yield hit
 
     def search_by_longterm_topic(self, topic, from_date=None, to_date=None):
         from_datetime, to_datetime = self._covert_to_datetime(from_date, to_date)
@@ -117,9 +123,6 @@ class Searcher(object):
 
         for hit in s.scan():
             yield hit
-        # response = s.execute()
-        # for hit in response:
-        #     yield hit
 
     def clear_daily_topic(self, news_ids=None, from_date=None, to_date=None):
         # # TODO: Rewrite this update using UpdateByQuery
@@ -174,7 +177,6 @@ class Searcher(object):
                 logger.warning("Failed to %s document %s: %r" % (action, doc_id, result))
             else:
                 logger.info(doc_id)
-
 
     def _update_daily_topic(self, news_ids, topic_ids):
         for news_id, topic_id in zip(news_ids, topic_ids):
