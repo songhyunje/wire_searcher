@@ -124,23 +124,33 @@ class Searcher(object):
         for hit in s.scan():
             yield hit
 
-    def clear_daily_topic(self, news_ids=None, from_date=None, to_date=None):
-        # # TODO: Rewrite this update using UpdateByQuery
-        # from_datetime, to_datetime = self._covert_to_datetime(from_datetime, to_datetime)
-        #
-        # ubq = UpdateByQuery(using=self.client, index=self.index) \
-        #       .filter('range', publish_datetime={'from': from_datetime, 'to': to_datetime}) \
-        #       .script(source="ctx._source.daily_topic=0")
-        #
-        # response = ubq.execute()
-        # logger.info("%s" % response)
+    def search_by_sub_topic(self, topic, from_date=None, to_date=None):
+        from_datetime, to_datetime = self._covert_to_datetime(from_date, to_date)
 
+        should = []
+        if isinstance(topic, list):
+            should.extend([Q('match', sub_topic=t) for t in topic])
+        else:
+            should.append(Q('match', sub_topic=topic))
+
+        q = Q('bool', should=should)
+        s = Search(using=self.client, index=self.news_index) \
+            .query(q) \
+            .filter('range', publish_datetime={'from': from_datetime, 'to': to_datetime})
+
+        for hit in s.scan():
+            yield hit
+
+    def clear_daily_topic(self, news_ids=None, from_date=None, to_date=None):
         if news_ids:
             topic_ids = [0] * len(news_ids)
 
         if not news_ids and from_date and to_date:
             from_datetime, to_datetime = self._covert_to_datetime(from_date, to_date)
+            must_not = [Q('match', longterm_topic='0')]
+            q = Q('bool', must_not=must_not)
             s = Search(using=self.client, index=self.news_index) \
+                .query(q) \
                 .filter('range', publish_datetime={'from': from_datetime, 'to': to_datetime})
 
             news_ids = [hit.meta.id for hit in s.scan()]
@@ -162,13 +172,41 @@ class Searcher(object):
 
         if not news_ids and from_date and to_date:
             from_datetime, to_datetime = self._covert_to_datetime(from_date, to_date)
+            must_not = [Q('match', longterm_topic='0')]
+            q = Q('bool', must_not=must_not)
             s = Search(using=self.client, index=self.news_index) \
+                .query(q) \
                 .filter('range', publish_datetime={'from': from_datetime, 'to': to_datetime})
 
             news_ids = [hit.meta.id for hit in s.scan()]
             topic_ids = [0] * len(news_ids)
 
         for ok, result in streaming_bulk(self.client, self._update_longterm_topic(news_ids, topic_ids),
+                                         index=self.news_index, chunk_size=100):
+            action, result = result.popitem()
+            doc_id = "/%s/doc/%s" % (self.news_index, result["_id"])
+
+            if not ok:
+                logger.warning("Failed to %s document %s: %r" % (action, doc_id, result))
+            else:
+                logger.info(doc_id)
+
+    def clear_sub_topic(self, news_ids=None, from_date=None, to_date=None):
+        if news_ids:
+            topic_ids = [0] * len(news_ids)
+
+        if not news_ids and from_date and to_date:
+            from_datetime, to_datetime = self._covert_to_datetime(from_date, to_date)
+            must_not = [Q('match', sub_topic='0')]
+            q = Q('bool', must_not=must_not)
+            s = Search(using=self.client, index=self.news_index) \
+                .query(q) \
+                .filter('range', publish_datetime={'from': from_datetime, 'to': to_datetime})
+
+            news_ids = [hit.meta.id for hit in s.scan()]
+            topic_ids = [0] * len(news_ids)
+
+        for ok, result in streaming_bulk(self.client, self._update_sub_topic(news_ids, topic_ids),
                                          index=self.news_index, chunk_size=100):
             action, result = result.popitem()
             doc_id = "/%s/doc/%s" % (self.news_index, result["_id"])
@@ -188,6 +226,12 @@ class Searcher(object):
         for news_id, topic_id in zip(news_ids, topic_ids):
             yield {
                 '_id': news_id, '_op_type': 'update', 'doc': {'longterm_topic': topic_id}
+            }
+
+    def _update_sub_topic(self, news_ids, topic_ids):
+        for news_id, topic_id in zip(news_ids, topic_ids):
+            yield {
+                '_id': news_id, '_op_type': 'update', 'doc': {'sub_topic': topic_id}
             }
 
     def _insert_topic_info(self, topic_ids, information, field):
@@ -215,6 +259,17 @@ class Searcher(object):
 
     def update_longterm_topics(self, news_ids, topic_ids):
         for ok, result in streaming_bulk(self.client, self._update_longterm_topic(news_ids, topic_ids),
+                                         index=self.news_index, chunk_size=100):
+            action, result = result.popitem()
+            doc_id = "/%s/doc/%s" % (self.news_index, result["_id"])
+
+            if not ok:
+                logger.warning("Failed to %s document %s: %r" % (action, doc_id, result))
+            else:
+                logger.info(doc_id)
+
+    def update_sub_topics(self, news_ids, topic_ids):
+        for ok, result in streaming_bulk(self.client, self._update_sub_topic(news_ids, topic_ids),
                                          index=self.news_index, chunk_size=100):
             action, result = result.popitem()
             doc_id = "/%s/doc/%s" % (self.news_index, result["_id"])
@@ -260,6 +315,27 @@ class Searcher(object):
         response = s.execute()
         for hit in response:
             yield hit
+
+    def get_topics_from_topic_index(self):
+        s = Search(using=self.client, index=self.topic_index)
+
+        response = s.scan()
+        for hit in response:
+            yield hit
+
+    def clear_topics_from_topic_index(self, topic):
+        should = []
+        if isinstance(topic, list):
+            should.extend([Q('match', topic_id=t) for t in topic])
+        else:
+            should.append(Q('match', topic_id=topic))
+
+        q = Q('bool', should=should)
+        s = Search(using=self.client, index=self.topic_index) \
+            .query(q)
+
+        response = s.delete()
+        return response.success()
 
     def aggregate(self, keyword):
         s = Search(using=self.client, index=self.news_index).query("match", content=keyword)
