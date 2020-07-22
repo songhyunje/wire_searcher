@@ -1,7 +1,7 @@
 import setuptools
 
 install_requires = [
-    'elasticsearch'
+    'elasticsearch',
     'elasticsearch_dsl'
 ]
 
