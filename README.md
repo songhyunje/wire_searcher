@@ -100,10 +100,13 @@ elasticsearch:
             "analyzer": "nori_analyzer"
         },
         "daily_topic": {
-           "type": "keyword",
+           "type": "keyword"
         },
         "longterm_topic": {
-           "type": "keyword",
+           "type": "keyword"
+        },
+        "sub_topic": {
+           "type": "keyword"
         }
       }
     }         
@@ -121,10 +124,13 @@ elasticsearch:
           "type": "keyword"
         },
         "text": {
-          "type": "keyword",
+          "type": "keyword"
         },
         "summary": {
-          "type": "keyword",
+          "type": "keyword"
+        },
+        "description": {
+          "type": "keyword"
         },
         "related_topic_ids": {
           "type": "keyword"

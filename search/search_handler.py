@@ -58,7 +58,10 @@ class Searcher(object):
         for hit in s.scan():
             yield hit
 
-    def search_topic_news_by_date(self, from_date, to_date, category=[]):
+    def search_topic_news_by_date(self, from_date, to_date, category=[],
+                                  fields=["news_id", "daily_topic", "longterm_topic",
+                                          "title", "publish_datetime", "content"]
+                                  ):
         from_datetime, to_datetime = self._covert_to_datetime(from_date, to_date)
 
         should = []
@@ -72,7 +75,9 @@ class Searcher(object):
         q = Q('bool', should=should, must_not=must_not)
         s = Search(using=self.client, index=self.news_index) \
             .query(q) \
-            .filter('range', publish_datetime={'from': from_datetime, 'to': to_datetime})
+            .source(fields) \
+            .filter('range', publish_datetime={'from': from_datetime, 'to': to_datetime}) \
+            .params(size=10000)
 
         for hit in s.scan():
             yield hit
@@ -303,7 +308,7 @@ class Searcher(object):
 
     def get_topic_from_topic_index(self, topic):
         should = []
-        if isinstance(topic, list):
+        if isinstance(topic, (list, set)):
             should.extend([Q('match', topic_id=t) for t in topic])
         else:
             should.append(Q('match', topic_id=topic))
